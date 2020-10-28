@@ -1,5 +1,4 @@
-__pycache__/short_url.cpython-38.pyc
-__pycache__/short_link.cpython-38.pyc
+__pycache__/*
 .vscode/settings.json
 Тестовое задание.pdf
 links.db

@@ -1,7 +1,7 @@
 import os
 import re
 import time
-from flask import Flask, request
+from flask import Flask, request, redirect
 from flask_sqlalchemy import SQLAlchemy
 from marshmallow import Schema, fields, validate, validates, ValidationError
 from hashids import Hashids
@@ -17,6 +17,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Model
 db = SQLAlchemy(app)
+
 class Link(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     long_url = db.Column(db.String(255), unique=True)
@@ -51,8 +52,7 @@ class LinkSchema(Schema):
 # API
 @app.route('/')
 def help():
-    message = r'''Valid is: /long_to_short - get shortlink, /<short_postfix> - redirect to link whth this postfix,
-         /statistics/<short_postfix> -the number of clicks on short link whth this postfix'''
+    message = r"Valid is: /long_to_short, /<short_postfix>, /statistics/<short_postfix>"
     return {"message": message}, 400
 
 
@@ -72,7 +72,7 @@ def long_to_short():
     code = 200
     link = Link.query.filter_by(long_url=data.long_url)
     if link is None:
-        link = Link(long_url=long_url)
+        link = Link(long_url=data.long_url)
         link.postfix = get_postfix(link.id)
         db.session.commit()
         code = 201
@@ -112,7 +112,7 @@ def statistics(short_postfix):
 def validate_postfix(postfix):
     try:
         schema = LinkSchema(only=('postfix',))
-        data = schema.load(short_postfix)
+        schema.load(postfix)
     except ValidationError:
         return False
     return True
