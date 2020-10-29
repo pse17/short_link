@@ -51,7 +51,7 @@ class LinkSchema(Schema):
 
 # API
 @app.route('/')
-def help():
+def root():
     message = r"Valid is: /long_to_short, /<short_postfix>, /statistics/<short_postfix>"
     return {"message": message}, 400
 
