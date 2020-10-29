@@ -3,7 +3,7 @@ import re
 import time
 from flask import Flask, request, redirect
 from flask_sqlalchemy import SQLAlchemy
-from marshmallow import Schema, fields, validate, validates, ValidationError
+from marshmallow import Schema, fields, validate, validates, ValidationError, post_load
 from hashids import Hashids
 
 app = Flask(__name__)
@@ -33,19 +33,23 @@ class LinkSchema(Schema):
     count = fields.Int()
     short_link = fields.Method("make_short_link", dump_only=True)
 
+    @post_load
+    def make_link(self, data, **kwargs):
+        return Link(**data)
+
     def make_short_link(self, link):
         return "http://mydomen.ru/{}".format(link.postfix)
     
-    @validates("long_url")
-    def validate_long_url(self, value):
-
-        regex = ("((http|https)://)" +
-             "[a-zA-Z0-9@:%._\\+~#?&//=]" +
-             "{2,256}\\.[a-z]" +
-             "{2,6}\\b([-a-zA-Z0-9@:%" +
-             "._\\+~#?&//=]*)")
-        s = re.compile(regex)
-        if re.match(s, value) is None:
+    @validates('long_url')
+    def validate_long_url(self, url):
+        regex = re.compile(
+            r'^(?:http|ftp)s?://' # http:// or https://
+            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|' #domain...
+            r'localhost|' #localhost...
+            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})' # ...or ip
+            r'(?::\d+)?' # optional port
+            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+        if re.match(regex, url) is None:
             raise ValidationError("URL is not valid")
  
 
@@ -64,21 +68,20 @@ def long_to_short():
     
     try:
         # Validate URL
-        schema = LinkSchema(only=('long_url',))
-        data = schema.load(json_data)
+        data = LinkSchema(only=('long_url',)).load(json_data)
     except ValidationError as message:
         return {"message": message}, 400
 
     code = 200
-    link = Link.query.filter_by(long_url=data.long_url)
+    link = Link.query.filter_by(long_url=data['long_url'])
     if link is None:
-        link = Link(long_url=data.long_url)
-        link.postfix = get_postfix(link.id)
+        postfix = get_postfix()
+        link = Link(long_url=data['long_url'], postfix=postfix)
+        db.session.add(link)
         db.session.commit()
         code = 201
     
-    schema = LinkSchema(only=('short_link',))
-    return schema.dump(link), code
+    return LinkSchema(only=('short_link',)).dump(link), code
 
 
 @app.route('/<short_postfix>')
@@ -118,7 +121,7 @@ def validate_postfix(postfix):
     return True
 
 
-def get_postfix(id):
+def get_postfix():
     hashids = Hashids(salt="salt is poison")
     postfix = hashids.encode(int(time.time()))
     return postfix
