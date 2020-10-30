@@ -5,7 +5,6 @@ from short_link.short_link import app, db, Link
 def get_client():
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_DATABASE_URI'] ='sqlite:///test.db'
-    
 
     with app.test_client() as client:
         with app.app_context():

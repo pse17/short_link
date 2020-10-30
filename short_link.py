@@ -5,6 +5,8 @@ from flask import Flask, request, redirect
 from flask_sqlalchemy import SQLAlchemy
 from marshmallow import Schema, fields, validate, validates, ValidationError, post_load
 from hashids import Hashids
+import logging
+logging.basicConfig(filename="sample.log", level=logging.INFO)
 
 app = Flask(__name__)
 
@@ -31,14 +33,11 @@ class LinkSchema(Schema):
     long_url = fields.Str()
     postfix = fields.Str(validate=validate.Length(max=8))
     count = fields.Int()
-    short_link = fields.Method("make_short_link", dump_only=True)
+    short_url = fields.Function(lambda obj: "http://mydomen.ru/{}".format(obj.postfix))
 
     @post_load
     def make_link(self, data, **kwargs):
         return Link(**data)
-
-    def make_short_link(self, link):
-        return "http://mydomen.ru/{}".format(link.postfix)
     
     @validates('long_url')
     def validate_long_url(self, url):
@@ -60,34 +59,43 @@ def root():
     return {"message": message}, 400
 
 
-@app.route('/long_to_short/', methods=['POST'])
+@app.route('/long_to_short/')
 def long_to_short():
     json_data = request.get_json()
+
+    logging.info("request is %s" % json_data)
+
     if not json_data:
         return {"message": "No input data provided"}, 400
     
     try:
         # Validate URL
-        data = LinkSchema(only=('long_url',)).load(json_data)
+        LinkSchema(only=('long_url',)).load(json_data)
     except ValidationError as message:
         return {"message": message}, 400
 
+    url = json_data['long_url']
     code = 200
-    link = Link.query.filter_by(long_url=data['long_url'])
+    #If exists
+    link = Link.query.filter_by(long_url=url)
+    
     if link is None:
         postfix = get_postfix()
-        link = Link(long_url=data['long_url'], postfix=postfix)
+        link = Link(long_url=url, postfix=postfix)
         db.session.add(link)
         db.session.commit()
         code = 201
     
-    return LinkSchema(only=('short_link',)).dump(link), code
+    return LinkSchema(only=('short_url',)).dump(link), code
 
 
 @app.route('/<short_postfix>')
 def redirect_to_long_link(short_postfix):
-    if not validate_postfix(short_postfix):
+    try:
+        LinkSchema(only=('postfix',)).validate(short_postfix)
+    except ValidationError:
         return {"message": "Postfix not valid"}, 400
+        
     
     link = Link.query.filter_by(postfix=short_postfix)
     if link is None:
@@ -101,24 +109,16 @@ def redirect_to_long_link(short_postfix):
 
 @app.route('/statistics/<short_postfix>')
 def statistics(short_postfix):
-    if not validate_postfix(short_postfix):
+    try:
+        LinkSchema(only=('postfix',)).validate(short_postfix)
+    except ValidationError:
         return {"message": "Postfix not valid"}, 400
     
     link = Link.query.filter_by(postfix=short_postfix)
     if link is None:
         return {"message": "Postfix not exist"}, 400
 
-    schema = LinkSchema(only=('count',))
-    return schema.dump(link), 200
-
-
-def validate_postfix(postfix):
-    try:
-        schema = LinkSchema(only=('postfix',))
-        schema.load(postfix)
-    except ValidationError:
-        return False
-    return True
+    return LinkSchema(only=('count',)).dump(link), 200
 
 
 def get_postfix():
