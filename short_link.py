@@ -31,7 +31,7 @@ class Link(db.Model):
 class LinkSchema(Schema):
     id = fields.Int()
     long_url = fields.Str()
-    postfix = fields.Str(validate=validate.Length(max=8))
+    postfix = fields.Str()
     count = fields.Int()
     short_url = fields.Function(lambda obj: "http://mydomen.ru/{}".format(obj.postfix))
 
@@ -59,66 +59,62 @@ def root():
     return {"message": message}, 400
 
 
-@app.route('/long_to_short/')
+@app.route('/long_to_short/', methods=['POST'])
 def long_to_short():
-    json_data = request.get_json()
+    if request.method == 'POST':
+        data = request.get_json()
 
-    logging.info("request is %s" % json_data)
-
-    if not json_data:
+    if not data:
         return {"message": "No input data provided"}, 400
     
     try:
         # Validate URL
-        LinkSchema(only=('long_url',)).load(json_data)
-    except ValidationError as message:
-        return {"message": message}, 400
+        load_data = LinkSchema(only=('long_url',)).load(data)
+    except ValidationError:
+        return {"message": "URL is not valid"}, 400
 
-    url = json_data['long_url']
-    code = 200
     #If exists
-    link = Link.query.filter_by(long_url=url)
+    code = 200
+    link = Link.query.filter_by(long_url=load_data.long_url).first()
     
     if link is None:
-        postfix = get_postfix()
-        link = Link(long_url=url, postfix=postfix)
+        link = load_data
+        link.postfix = get_postfix()
         db.session.add(link)
         db.session.commit()
         code = 201
-    
-    return LinkSchema(only=('short_url',)).dump(link), code
+
+    return LinkSchema(only=('short_url',)).dumps(link), code
 
 
 @app.route('/<short_postfix>')
 def redirect_to_long_link(short_postfix):
-    try:
-        LinkSchema(only=('postfix',)).validate(short_postfix)
-    except ValidationError:
-        return {"message": "Postfix not valid"}, 400
-        
     
-    link = Link.query.filter_by(postfix=short_postfix)
+    logging.info("request is %s" % short_postfix)
+    
+   
+    link = Link.query.filter_by(postfix=short_postfix).first()
     if link is None:
+        logging.info("not exist ")
         return {"message": "Postfix not exist"}, 400
     
+    logging.info("link is %s" % link)
+
     # Increment counter
-    link.count += 1
+    link.count = link.count + 1
+    db.session.commit()
     # Redirect to previous long url
     return redirect(link.long_url, code=302)
 
 
 @app.route('/statistics/<short_postfix>')
 def statistics(short_postfix):
-    try:
-        LinkSchema(only=('postfix',)).validate(short_postfix)
-    except ValidationError:
-        return {"message": "Postfix not valid"}, 400
-    
+   
     link = Link.query.filter_by(postfix=short_postfix)
     if link is None:
         return {"message": "Postfix not exist"}, 400
 
-    return LinkSchema(only=('count',)).dump(link), 200
+    return LinkSchema(only=('count',)).dumps(link), 200
 
 
 def get_postfix():

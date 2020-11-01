@@ -1,1 +1,4 @@
-
+INFO:root:request is qwertyu
+INFO:root:link is <Link 2>
+INFO:root:request is 1234567890
+INFO:root:not exist 
