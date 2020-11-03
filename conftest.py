@@ -29,7 +29,8 @@ def get_db():
 
 @pytest.fixture(scope="function")
 def get_link(get_db):
-    link = Link(long_url='http://ya.ru') 
+    postfix = 'qwertyu'
+    link = Link(long_url='http://ya.ru', postfix=postfix) 
     db = get_db
     db.session.add(link)
     db.session.commit()

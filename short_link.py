@@ -5,22 +5,23 @@ from flask import Flask, request, redirect
 from flask_sqlalchemy import SQLAlchemy
 from marshmallow import Schema, fields, validate, validates, ValidationError, post_load
 from hashids import Hashids
-import logging
-logging.basicConfig(filename="sample.log", level=logging.INFO)
+
 
 app = Flask(__name__)
 
 # Config 
 env = os.environ.get('FLASK_ENV')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
 if env == 'development':
     app.config['SQLALCHEMY_DATABASE_URI'] ='sqlite:///links.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
 # Model
 db = SQLAlchemy(app)
 
 class Link(db.Model):
+    """ Describe model link"""
     id = db.Column(db.Integer, primary_key=True)
     long_url = db.Column(db.String(255), unique=True)
     postfix = db.Column(db.String(8), unique=True)
@@ -89,17 +90,10 @@ def long_to_short():
 
 @app.route('/<short_postfix>')
 def redirect_to_long_link(short_postfix):
-    
-    logging.info("request is %s" % short_postfix)
-    
-   
     link = Link.query.filter_by(postfix=short_postfix).first()
     if link is None:
-        logging.info("not exist ")
         return {"message": "Postfix not exist"}, 400
     
-    logging.info("link is %s" % link)
-
     # Increment counter
     link.count = link.count + 1
     db.session.commit()
@@ -110,7 +104,7 @@ def redirect_to_long_link(short_postfix):
 @app.route('/statistics/<short_postfix>')
 def statistics(short_postfix):
    
-    link = Link.query.filter_by(postfix=short_postfix)
+    link = Link.query.filter_by(postfix=short_postfix).first()
     if link is None:
         return {"message": "Postfix not exist"}, 400
 

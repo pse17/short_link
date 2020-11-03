@@ -20,7 +20,7 @@ def test_link_shema_dump(get_db, get_link):
     assert "http://mydomen.ru/" in dump['short_url']
 
 
-def test_link_schema_load(get_db, get_link):
+def test_link_schema_load():
     with pytest.raises(ValidationError):
         LinkSchema(only=('long_url',)).load({'long_url': 'foo'})
 
@@ -54,18 +54,15 @@ def test_client_long_to_short(get_client, get_db):
     assert "URL is not valid" in data['message']
 
 
-def test_client_short_postfix(get_client, get_db):
+def test_client_short_postfix(get_client, get_db, get_link):
     test_client = get_client
     db = get_db
+    link = get_link
     
-    short_postfix = 'qwertyu'
-    link = Link(postfix=short_postfix)
-    db.session.add(link)
-    db.session.commit()
-    
-    response = test_client.get("/%s" % short_postfix)
+    postfix = 'qwertyu'
+    response = test_client.get("/%s" % postfix)
     assert response.status_code == 302
-    assert 
+    assert link.count == 1
 
     bad_postfix = "1234567890"
     response = test_client.get("/%s" % bad_postfix)
@@ -74,7 +71,25 @@ def test_client_short_postfix(get_client, get_db):
     assert "Postfix not exist" in data['message']
 
 
+def test_client_statistics(get_client, get_db, get_link):
+    test_client = get_client
+    db = get_db
+    link = get_link
+    postfix = 'qwertyu'
+    # Increment count
+    test_client.get("/%s" % postfix)
+    test_client.get("/%s" % postfix)
 
+    response = test_client.get("/statistics/%s" % postfix)
+    data = json.loads(response.data)
+    assert response.status_code == 200
+    assert data['count'] == 2
+
+    bad_postfix = "1234567890"
+    response = test_client.get("/%s" % bad_postfix)
+    data = json.loads(response.data)
+    assert response.status_code == 400
+    assert "Postfix not exist" in data['message']
 
 
 
