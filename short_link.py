@@ -30,6 +30,7 @@ class Link(db.Model):
 
 # Shema
 class LinkSchema(Schema):
+    """ Describe schema for serialize/deserialize link data """
     id = fields.Int()
     long_url = fields.Str()
     postfix = fields.Str()
@@ -37,11 +38,13 @@ class LinkSchema(Schema):
     short_url = fields.Function(lambda obj: "http://mydomen.ru/{}".format(obj.postfix))
 
     @post_load
+    ''' Deserialize to link instance '''
     def make_link(self, data, **kwargs):
         return Link(**data)
     
     @validates('long_url')
     def validate_long_url(self, url):
+        """ Validate full URL """
         regex = re.compile(
             r'^(?:http|ftp)s?://' # http:// or https://
             r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|' #domain...
@@ -54,14 +57,13 @@ class LinkSchema(Schema):
  
 
 # API
-@app.route('/')
-def root():
-    message = r"Valid is: /long_to_short, /<short_postfix>, /statistics/<short_postfix>"
-    return {"message": message}, 400
-
 
 @app.route('/long_to_short/', methods=['POST'])
 def long_to_short():
+    """ Return shortlink
+
+     
+    """
     if request.method == 'POST':
         data = request.get_json()
 
@@ -109,6 +111,11 @@ def statistics(short_postfix):
         return {"message": "Postfix not exist"}, 400
 
     return LinkSchema(only=('count',)).dumps(link), 200
+
+
+@app.route('/')
+def root():
+    return {"message": "Not allowed"}, 400
 
 
 def get_postfix():
